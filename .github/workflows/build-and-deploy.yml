@@ -34,12 +34,13 @@ jobs:
           app.py
 
     - name: Verify build
+      shell: pwsh  # 使用PowerShell
       run: |
-        dir dist\
-        if not exist "dist\MyApp.exe" (
-          echo "::error::Build failed!"
+        Get-ChildItem -Path dist
+        if (-not (Test-Path "dist\MyApp.exe")) {
+          Write-Error "Build failed!"
           exit 1
-        )
+        }
 
     - name: Create Release
       if: github.ref == 'refs/heads/main' || github.ref == 'refs/heads/master'
