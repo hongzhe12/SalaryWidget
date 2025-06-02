@@ -25,7 +25,7 @@ jobs:
       shell: bash
       run: |
         python -m pip install --upgrade pip
-        pip install --upgrade PySide6 pyinstaller
+        pip install --upgrade PySide6 pyinstaller pyside6-tools
         if [ -f "requirements.txt" ]; then pip install -r requirements.txt; fi
 
     - name: Build executable
@@ -47,14 +47,21 @@ jobs:
         # 清理旧构建
         rm -rf build dist
 
-        # 动态构建参数
+        # 处理资源文件（Windows兼容写法）
         ADD_DATA_ARGS=""
-        shopt -s nullglob
+        if [ -f "resources.qrc" ]; then
+          # 先编译qrc文件
+          pyside6-rcc resources.qrc -o resources.py
+          ADD_DATA_ARGS="--add-data resources.qrc;."
+        fi
+
+        # 处理UI文件
         for ui_file in *.ui; do
-          ADD_DATA_ARGS="$ADD_DATA_ARGS --add-data '$ui_file;.'"
-        done
-        for qrc_file in *.qrc; do
-          ADD_DATA_ARGS="$ADD_DATA_ARGS --add-data '$qrc_file;.'"
+          if [ -f "$ui_file" ]; then
+            # 编译UI文件
+            pyside6-uic "$ui_file" > "${ui_file%.ui}.py"
+            ADD_DATA_ARGS="$ADD_DATA_ARGS --add-data $ui_file;."
+          fi
         done
 
         # 执行构建
@@ -63,12 +70,12 @@ jobs:
           --specpath "." \
           --distpath "./dist" \
           --workpath "./build" \
-          $ADD_DATA_ARGS \
           --hidden-import='PySide6.QtXml' \
+          $ADD_DATA_ARGS \
           "$ENTRY_FILE"
 
     - name: Verify build
-      shell: bash  # 关键修复：必须指定bash
+      shell: bash
       run: |
         echo "=== Build Results ==="
         ls -lh dist/
