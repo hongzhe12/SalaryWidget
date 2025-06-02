@@ -50,15 +50,12 @@ jobs:
         # 强制清理旧构建
         rm -rf build dist
 
-        # 执行构建（关键参数优化）
+        # 执行构建（关键参数优化） 按实际填写
         pyinstaller --noconfirm --onefile --windowed \
           --name "$APP_NAME" \
           --specpath "." \
           --distpath "./dist" \
           --workpath "./build" \
-          --add-data "*.ui;." \
-          --add-data "*.qrc;." \
-          --add-data "*.png;." \
           --hidden-import='PySide6.QtXml' \
           "$ENTRY_FILE"
 
