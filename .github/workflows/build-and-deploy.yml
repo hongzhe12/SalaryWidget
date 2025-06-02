@@ -1,0 +1,67 @@
+name: Build and Release
+
+on:
+  push:
+    branches: [ master ]
+  pull_request:
+    branches: [ master ]
+
+jobs:
+  build-and-release:
+    runs-on: windows-latest
+    permissions:
+      contents: write
+    outputs:
+      release_url: ${{ steps.create-release.outputs.upload_url }}
+
+    steps:
+    - uses: actions/checkout@v4
+
+    - name: Set up Python 3.9
+      uses: actions/setup-python@v4
+      with:
+        python-version: "3.9"
+
+    - name: Install dependencies
+      run: |
+        python -m pip install --upgrade pip
+        pip install pyinstaller pandas
+        pip install -r requirements.txt
+
+    - name: Build executable
+      shell: bash
+      run: |
+        pyinstaller --noconfirm --onefile --windowed \
+          --icon "icons/favicon.ico" \
+          --name "NiceBoard" \
+          --add-data "static;static" \
+          --add-data "templates;templates" \
+          --add-data "uploads;uploads" \
+          app.py
+
+    - name: Verify build output
+      shell: bash
+      run: |
+        echo "=== 构建结果验证 ==="
+        echo "当前目录: $(pwd)"
+        echo "dist目录内容:"
+        ls -lh dist/
+        echo "可执行文件信息:"
+        file dist/NiceBoard.exe || echo "文件检查失败，但可能只是file命令不可用"
+        echo "文件大小: $(du -h dist/NiceBoard.exe)"
+        [ -f "dist/NiceBoard.exe" ] && echo "✅ 可执行文件存在" || echo "❌ 可执行文件缺失"
+
+    - name: Create Release
+      id: create-release
+      if: github.ref == 'refs/heads/master'
+      uses: softprops/action-gh-release@v1
+      with:
+        files: |
+          dist/NiceBoard.exe
+          static/
+          templates/
+          uploads/
+        tag_name: v${{ github.run_number }}
+        body: |
+          自动构建版本 - ${{ github.sha }}
+          下载地址: https://github.com/${{ github.repository }}/releases/download/v${{ github.run_number }}/NiceBoard.exe
