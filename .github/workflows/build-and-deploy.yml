@@ -1,9 +1,7 @@
-name: PySide6 Auto Build
+name: PySide6 Build
 
 on:
   push:
-    branches: [ main, master ]
-  pull_request:
     branches: [ main, master ]
 
 jobs:
@@ -19,79 +17,33 @@ jobs:
       uses: actions/setup-python@v4
       with:
         python-version: "3.9"
-        cache: 'pip'
 
     - name: Install dependencies
-      shell: bash
       run: |
         python -m pip install --upgrade pip
-        pip install --upgrade PySide6 pyinstaller pyside6-tools
-        if [ -f "requirements.txt" ]; then pip install -r requirements.txt; fi
+        pip install PySide6 pyinstaller
 
     - name: Build executable
-      shell: bash
+      shell: cmd  # 使用Windows原生shell
       run: |
-        # 检测入口文件
-        if [ -f "app.py" ]; then
-          ENTRY_FILE="app.py"
-        elif [ -f "main.py" ]; then
-          ENTRY_FILE="main.py"
-        else
-          echo "::error::No entry file found!"
-          exit 1
-        fi
-
-        # 获取仓库名作为应用名
-        APP_NAME=$(basename "$GITHUB_REPOSITORY")
-
-        # 清理旧构建
-        rm -rf build dist
-
-        # 处理资源文件（Windows兼容写法）
-        ADD_DATA_ARGS=""
-        if [ -f "resources.qrc" ]; then
-          # 先编译qrc文件
-          pyside6-rcc resources.qrc -o resources.py
-          ADD_DATA_ARGS="--add-data resources.qrc;."
-        fi
-
-        # 处理UI文件
-        for ui_file in *.ui; do
-          if [ -f "$ui_file" ]; then
-            # 编译UI文件
-            pyside6-uic "$ui_file" > "${ui_file%.ui}.py"
-            ADD_DATA_ARGS="$ADD_DATA_ARGS --add-data $ui_file;."
-          fi
-        done
-
-        # 执行构建
-        pyinstaller --noconfirm --onefile --windowed \
-          --name "$APP_NAME" \
-          --specpath "." \
-          --distpath "./dist" \
-          --workpath "./build" \
-          --hidden-import='PySide6.QtXml' \
-          $ADD_DATA_ARGS \
-          "$ENTRY_FILE"
+        pyinstaller --onefile --windowed --noconfirm ^
+          --name MyApp ^
+          --specpath . ^
+          --distpath ./dist ^
+          --workpath ./build ^
+          app.py
 
     - name: Verify build
-      shell: bash
       run: |
-        echo "=== Build Results ==="
-        ls -lh dist/
-        if [ ! -f "dist/${APP_NAME}.exe" ]; then
+        dir dist\
+        if not exist "dist\MyApp.exe" (
           echo "::error::Build failed!"
           exit 1
-        fi
-        echo "✅ Build succeeded!"
+        )
 
     - name: Create Release
       if: github.ref == 'refs/heads/main' || github.ref == 'refs/heads/master'
       uses: softprops/action-gh-release@v1
       with:
-        files: dist/*.exe
-        tag_name: v$(date +%Y%m%d%H%M)
-        body: |
-          🚀 Auto-built Release
-          - Commit: ${{ github.sha }}
-          - Build Time: $(date)
+        files: dist/MyApp.exe
+        tag_name: v${{ github.run_number }}
