@@ -1,0 +1,5 @@
+<RCC>
+  <qresource prefix="/">
+    <file>icon/柯基.svg</file>
+  </qresource>
+</RCC>
