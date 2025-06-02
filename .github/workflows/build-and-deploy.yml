@@ -1,54 +1,86 @@
-name: Build and Release
+name: PySide6 Auto Build
 
 on:
   push:
-    branches: [ master ]
+    branches: [ main, master ]
   pull_request:
-    branches: [ master ]
+    branches: [ main, master ]
 
 jobs:
-  build-and-release:
+  build:
     runs-on: windows-latest
     permissions:
       contents: write
-    outputs:
-      release_url: ${{ steps.create-release.outputs.upload_url }}
 
     steps:
     - uses: actions/checkout@v4
 
+    # 1. 设置Python环境（固定3.9版本）
     - name: Set up Python 3.9
       uses: actions/setup-python@v4
       with:
         python-version: "3.9"
+        cache: 'pip'  # 自动缓存pip依赖
 
+    # 2. 安装核心依赖（强制使用最新版）
     - name: Install dependencies
       run: |
         python -m pip install --upgrade pip
-        pip install pyinstaller PySide6
-        pip install -r requirements.txt
+        pip install --upgrade PySide6 pyinstaller
+        if [ -f "requirements.txt" ]; then pip install -r requirements.txt; fi
 
+    # 3. 智能构建（自动识别入口文件）
     - name: Build executable
       shell: bash
       run: |
+        # 自动检测主程序文件（优先选择app.py/main.py）
+        if [ -f "app.py" ]; then
+          ENTRY_FILE="app.py"
+        elif [ -f "main.py" ]; then
+          ENTRY_FILE="main.py"
+        else
+          echo "::error::未找到app.py或main.py！请在仓库根目录放置入口文件"
+          exit 1
+        fi
+
+        # 使用仓库名作为生成的可执行文件名
+        APP_NAME=$(basename "$GITHUB_REPOSITORY")
+
+        # 强制清理旧构建
+        rm -rf build dist
+
+        # 执行构建（关键参数优化）
         pyinstaller --noconfirm --onefile --windowed \
-          --name "${{ github.repository }}" \
-          app.py
+          --name "$APP_NAME" \
+          --specpath "." \
+          --distpath "./dist" \
+          --workpath "./build" \
+          --add-data "*.ui;." \
+          --add-data "*.qrc;." \
+          --add-data "*.png;." \
+          --hidden-import='PySide6.QtXml' \
+          "$ENTRY_FILE"
 
-    - name: Verify build output
-      shell: bash
+    # 4. 验证构建结果
+    - name: Verify build
       run: |
-        echo "Build verification:"
+        echo "=== 构建结果 ==="
         ls -lh dist/
-        [ -f "dist/${{ github.repository }}.exe" ] && echo "✅ Build successful" || exit 1
+        if [ ! -f "dist/$APP_NAME.exe" ]; then
+          echo "::error::构建失败！未生成可执行文件"
+          exit 1
+        fi
+        echo "✅ 构建成功！"
 
+    # 5. 自动发布（仅main/master分支触发）
     - name: Create Release
-      id: create-release
-      if: github.ref == 'refs/heads/master'
+      if: github.ref == 'refs/heads/main' || github.ref == 'refs/heads/master'
       uses: softprops/action-gh-release@v1
       with:
-        files: dist/${{ github.repository }}.exe
-        tag_name: v${{ github.run_number }}
+        files: dist/*.exe
+        tag_name: v$(date +%Y%m%d%H%M)
         body: |
-          Auto-generated release - ${{ github.sha }}
-          Download: https://github.com/${{ github.repository }}/releases/download/v${{ github.run_number }}/${{ github.repository }}.exe
+          🚀 自动构建版本
+          - 提交ID: ${{ github.sha }}
+          - 构建时间: $(date)
+          - 下载: ${{ github.server_url }}/${{ github.repository }}/releases/download/v$(date +%Y%m%d%H%M)/$APP_NAME.exe
